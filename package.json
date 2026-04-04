@@ -1,0 +1,35 @@
+{
+  "name": "submission-processor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/worker.js",
+    "dev": "tsx src/worker.ts",
+    "docker:build": "docker build -t submission-processor:latest -t submission-processor:1.0.0 .",
+    "docker:run": "docker run --env-file .env submission-processor:latest",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1024.0",
+    "@aws-sdk/client-ssm": "^3.1024.0",
+    "aws-sdk": "^2.1693.0",
+    "dotenv": "^17.4.0",
+    "express": "^5.2.1",
+    "sqs-consumer": "^14.2.6",
+    "uuid": "^13.0.0",
+    "winston": "^3.19.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
