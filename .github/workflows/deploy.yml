@@ -38,10 +38,10 @@ on:
         type: string
         default: "submission-processor"
       log-level:
-        description: "Log level for Lambda"
+        description: "Log level for Lambda (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)"
         required: false
         type: string
-        default: "info"
+        default: "INFO"
     secrets:
       AWS_ROLE_ARN:
         description: "IAM role ARN for GitHub OIDC"

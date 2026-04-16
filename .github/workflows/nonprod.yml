@@ -44,6 +44,6 @@ jobs:
       sqs-queue-url: https://sqs.ap-southeast-1.amazonaws.com/479897912900/user-info-queue
       artifact-s3-bucket: my-lambda-artifacts-bucket-mh24
       cfn-stack-name: submission-processor
-      log-level: debug
+      log-level: DEBUG
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_NONPROD }}

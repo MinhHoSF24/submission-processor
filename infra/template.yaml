@@ -35,8 +35,8 @@ Parameters:
 
   LogLevel:
     Type: String
-    Default: info
-    AllowedValues: [debug, info, warn, error]
+    Default: INFO
+    AllowedValues: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL]
 
   LogRetentionDays:
     Type: Number
