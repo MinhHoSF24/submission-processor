@@ -1,0 +1,75 @@
+##############################################################################
+# Reusable workflow: Destroy CloudFormation stack + cleanup S3 artifacts
+##############################################################################
+name: Destroy Submission Processor Stack
+
+on:
+  workflow_call:
+    inputs:
+      branch-slug:
+        description: "Branch slug of the stack to destroy"
+        required: true
+        type: string
+      aws-region:
+        description: "AWS region"
+        required: false
+        type: string
+        default: "ap-southeast-1"
+      cfn-stack-name:
+        description: "CloudFormation stack name prefix"
+        required: false
+        type: string
+        default: "submission-processor"
+      artifact-s3-bucket:
+        description: "S3 bucket containing lambda.zip artifacts (for cleanup)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      AWS_ROLE_ARN:
+        description: "IAM role ARN for GitHub OIDC"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy (${{ inputs.branch-slug }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Check if stack exists
+        id: check
+        run: |
+          STACK_NAME="${{ inputs.cfn-stack-name }}-${{ inputs.branch-slug }}"
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Stack $STACK_NAME does not exist, skipping."
+          fi
+
+      - name: Delete CloudFormation stack
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          STACK_NAME="${{ inputs.cfn-stack-name }}-${{ inputs.branch-slug }}"
+          echo "Deleting stack: $STACK_NAME"
+          aws cloudformation delete-stack --stack-name "$STACK_NAME"
+          echo "Waiting for stack deletion..."
+          aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME"
+          echo "Stack $STACK_NAME deleted successfully."
+
+      - name: Cleanup S3 artifacts
+        if: inputs.artifact-s3-bucket != ''
+        run: |
+          PREFIX="submission-processor/${{ inputs.branch-slug }}/"
+          echo "Deleting artifacts: s3://${{ inputs.artifact-s3-bucket }}/${PREFIX}"
+          aws s3 rm "s3://${{ inputs.artifact-s3-bucket }}/${PREFIX}" --recursive || true

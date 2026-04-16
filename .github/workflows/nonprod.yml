@@ -1,0 +1,45 @@
+##############################################################################
+# Nonprod Deploy — triggered when a PR is opened / updated against main.
+# Each branch creates its own stack: submission-processor-<branch-slug>
+##############################################################################
+name: Deploy Nonprod (PR)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Compute a CloudFormation-safe branch slug (alphanumeric + hyphens only)
+  prepare:
+    name: Prepare branch slug
+    runs-on: ubuntu-latest
+    outputs:
+      branch-slug: ${{ steps.slug.outputs.branch-slug }}
+    steps:
+      - name: Slugify branch name
+        id: slug
+        run: |
+          # Get branch name from PR or workflow_dispatch
+          RAW="${{ github.head_ref || github.ref_name }}"
+          # Lowercase, replace non-alphanumeric with hyphens, collapse doubles, trim edges, max 40 chars
+          SLUG=$(echo "$RAW" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)
+          echo "branch-slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          echo "Branch: $RAW → Slug: $SLUG"
+
+  deploy:
+    name: Deploy
+    needs: prepare
+    uses: ./.github/workflows/deploy.yml
+    with:
+      branch-slug: ${{ needs.prepare.outputs.branch-slug }}
+      aws-region: ap-southeast-1
+      s3-bucket-name: my-user-data-json-bucket
+      sqs-queue-arn: arn:aws:sqs:ap-southeast-1:479897912900:user-info-queue
+      sqs-queue-url: https://sqs.ap-southeast-1.amazonaws.com/479897912900/user-info-queue
+      artifact-s3-bucket: my-lambda-artifacts-bucket-mh24
+      cfn-stack-name: submission-processor
+      log-level: debug
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_NONPROD }}

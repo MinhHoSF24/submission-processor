@@ -1,0 +1,112 @@
+##############################################################################
+# Reusable workflow: Build → Package → Upload artifact → Deploy CloudFormation
+# Each branch creates its own stack via `branch-slug`.
+##############################################################################
+name: Deploy Submission Processor
+
+on:
+  workflow_call:
+    inputs:
+      branch-slug:
+        description: "Sanitized branch name, used as stack name suffix and resource identifier"
+        required: true
+        type: string
+      aws-region:
+        description: "AWS region"
+        required: false
+        type: string
+        default: "ap-southeast-1"
+      s3-bucket-name:
+        description: "S3 bucket to store submissions"
+        required: true
+        type: string
+      sqs-queue-arn:
+        description: "ARN of the SQS queue"
+        required: true
+        type: string
+      sqs-queue-url:
+        description: "URL of the SQS queue"
+        required: true
+        type: string
+      artifact-s3-bucket:
+        description: "S3 bucket to store lambda.zip artifacts"
+        required: true
+        type: string
+      cfn-stack-name:
+        description: "CloudFormation stack name prefix"
+        required: false
+        type: string
+        default: "submission-processor"
+      log-level:
+        description: "Log level for Lambda"
+        required: false
+        type: string
+        default: "info"
+    secrets:
+      AWS_ROLE_ARN:
+        description: "IAM role ARN for GitHub OIDC"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy (${{ inputs.branch-slug }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Package Lambda
+        run: bash scripts/package-lambda.sh
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Upload artifact to S3
+        id: upload
+        run: |
+          ARTIFACT_KEY="submission-processor/${{ inputs.branch-slug }}/${{ github.sha }}.zip"
+          aws s3 cp lambda.zip "s3://${{ inputs.artifact-s3-bucket }}/${ARTIFACT_KEY}"
+          echo "artifact-key=${ARTIFACT_KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy CloudFormation
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/template.yaml \
+            --stack-name "${{ inputs.cfn-stack-name }}-${{ inputs.branch-slug }}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment="${{ inputs.branch-slug }}" \
+              S3BucketName="${{ inputs.s3-bucket-name }}" \
+              SqsQueueArn="${{ inputs.sqs-queue-arn }}" \
+              SqsQueueUrl="${{ inputs.sqs-queue-url }}" \
+              LambdaS3Bucket="${{ inputs.artifact-s3-bucket }}" \
+              LambdaS3Key="${{ steps.upload.outputs.artifact-key }}" \
+              LogLevel="${{ inputs.log-level }}" \
+              LogRetentionDays="7"
+
+      - name: Verify Lambda
+        run: |
+          FUNCTION_NAME="submission-processor-${{ inputs.branch-slug }}"
+          aws lambda get-function --function-name "$FUNCTION_NAME" \
+            --query "Configuration.[FunctionName,Runtime,LastModified]" --output table
