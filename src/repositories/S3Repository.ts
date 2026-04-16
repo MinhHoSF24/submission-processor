@@ -6,15 +6,12 @@ export class S3Repository {
   private bucketName: string;
 
   constructor() {
-    // Khởi tạo S3 Client
-    // 💡 Best Practice: Không hardcode Access Key/Secret Key ở đây.
-    // Khi chạy trên AWS (EC2, ECS, Lambda), nó tự động lấy quyền từ IAM Role.
-    // Khi chạy Local, nó tự đọc từ ~/.aws/credentials hoặc biến môi trường.
+    // On AWS (EC2, ECS, Lambda), credentials are resolved automatically via IAM Role.
+    // Locally, they are read from ~/.aws/credentials or environment variables.
     this.client = new S3Client({
       region: process.env.AWS_REGION || "ap-southeast-1"
     });
 
-    // Ném lỗi ngay lúc khởi động nếu quên cài biến môi trường
     if (!process.env.S3_BUCKET_NAME) {
       throw new Error("Missing S3_BUCKET_NAME environment variable");
     }
@@ -22,10 +19,10 @@ export class S3Repository {
   }
 
   /**
-   * Lưu payload thô dưới định dạng JSON với key: submissions/yyyy/mm/dd/uuid.json
+   * Save raw payload as JSON with key: submissions/yyyy/mm/dd/uuid.json
    */
   async saveRawPayload(payload: Submission): Promise<string> {
-    // 1. Sinh đường dẫn yyyy/mm/dd an toàn theo UTC
+    // 1. Build a UTC-safe yyyy/mm/dd path
     const date = new Date();
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -33,22 +30,21 @@ export class S3Repository {
 
     const objectKey = `submissions/${year}/${month}/${day}/${payload.userId}.json`;
 
-    // 2. Định nghĩa Command
+    // 2. Build the PutObject command
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: objectKey,
-      Body: JSON.stringify(payload), // Chuyển Object thành chuỗi JSON
-      ContentType: "application/json", // Giúp xem file dễ hơn trên giao diện AWS
+      Body: JSON.stringify(payload),
+      ContentType: "application/json",
     });
 
-    // 3. Thực thi
+    // 3. Execute
     try {
       await this.client.send(command);
-      console.log(`[S3] Upload thành công: s3://${this.bucketName}/${objectKey}`);
+      console.log(`[S3] Upload succeeded: s3://${this.bucketName}/${objectKey}`);
       return objectKey;
     } catch (error) {
-      console.error(`[S3] Lỗi upload file ${objectKey}`, error);
-      // Ném lỗi ra để tầng Use Case/Worker phía trên bắt và đẩy message vào DLQ
+      console.error(`[S3] Failed to upload ${objectKey}`, error);
       throw error;
     }
   }

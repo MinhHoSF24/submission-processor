@@ -8,8 +8,8 @@ import { SubmissionService } from "./services/SubmissionService.js";
 import { logger } from "./utils/logger.js";
 
 /**
- * Ưu tiên `SQS_QUEUE_URL` (local / ECS env).
- * Nếu không có, đọc URL từ Parameter Store qua `SQS_QUEUE_URL_PARAMETER`.
+ * Prefer `SQS_QUEUE_URL` env var (local / ECS).
+ * Falls back to reading the URL from Parameter Store via `SQS_QUEUE_URL_PARAMETER`.
  */
 async function resolveSqsQueueUrl(): Promise<string> {
   const direct = process.env.SQS_QUEUE_URL?.trim();
@@ -20,7 +20,7 @@ async function resolveSqsQueueUrl(): Promise<string> {
   const parameterName = process.env.SQS_QUEUE_URL_PARAMETER?.trim();
   if (!parameterName) {
     throw new Error(
-      "Thiếu SQS_QUEUE_URL hoặc SQS_QUEUE_URL_PARAMETER trong biến môi trường"
+      "Missing SQS_QUEUE_URL or SQS_QUEUE_URL_PARAMETER environment variable"
     );
   }
 
@@ -34,7 +34,7 @@ async function resolveSqsQueueUrl(): Promise<string> {
   );
   const url = out.Parameter?.Value?.trim();
   if (!url) {
-    throw new Error(`SSM parameter "${parameterName}" không có giá trị`);
+    throw new Error(`SSM parameter "${parameterName}" has no value`);
   }
   return url;
 }
@@ -47,8 +47,8 @@ async function main(): Promise<void> {
 
   const app = Consumer.create({
     queueUrl,
-    // Mặc định shouldDeleteMessages: true. Chỉ khi handleMessage trả về đúng Message (cùng MessageId)
-    // thì consumer mới gọi DeleteMessage — return undefined sẽ KHÔNG xóa khỏi queue.
+    // Default shouldDeleteMessages: true. The consumer only calls DeleteMessage
+    // when handleMessage returns the original Message (matching MessageId).
     shouldDeleteMessages: true,
     handleMessage: async (message: Message): Promise<Message> => {
       const correlationId = message.MessageId ?? "unknown";
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
         await submissionService.processSubmission(body);
         return message;
       } catch (error) {
-        msgLogger.error("Lỗi xử lý message", {
+        msgLogger.error("Failed to process message", {
           error,
           messageId: message.MessageId ?? "unknown",
         });
@@ -77,6 +77,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  logger.error("Worker không khởi động được", { err });
+  logger.error("Worker failed to start", { err });
   process.exit(1);
 });
