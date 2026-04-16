@@ -84,19 +84,29 @@
       "Resource": "arn:aws:iam::479897912900:role/submission-processor-*"
     },
     {
-      "Sid": "CloudWatchLogGroups",
+      "Sid": "CloudWatchLogGroupsMutate",
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogGroup",
         "logs:DeleteLogGroup",
-        "logs:DescribeLogGroups",
         "logs:PutRetentionPolicy",
         "logs:DeleteRetentionPolicy",
         "logs:TagLogGroup",
         "logs:UntagLogGroup",
-        "logs:ListTagsLogGroup"
+        "logs:ListTagsLogGroup",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:ListTagsForResource"
       ],
       "Resource": "arn:aws:logs:ap-southeast-1:479897912900:log-group:/aws/lambda/submission-processor-*"
+    },
+    {
+      "Sid": "CloudWatchLogGroupsDescribe",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": "*"
     }
   ]
 }

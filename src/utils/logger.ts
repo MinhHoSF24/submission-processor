@@ -17,7 +17,7 @@ const localFormat = printf(({ level, message, timestamp, ...metadata }) => {
 export const logger = winston.createLogger({
   level: (process.env.LOG_LEVEL || "info").toLowerCase(),
   format: isLambda
-    ? combine(timestamp({ format: "YYYY-MM-DD'T'HH:mm:ss.SSSZ" }), json())
+    ? combine(timestamp(), json())
     : combine(colorize(), timestamp({ format: "YYYY-MM-DD HH:mm:ss" }), localFormat),
   transports: [new winston.transports.Console()],
 });
